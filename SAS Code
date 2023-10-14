@@ -1,83 +1,81 @@
-# SAS CODE 
-
-data mydata.asthmareduced;
-	rename value = asthma;
-	set mydata.asthma (keep = statefips state countyfips county value);
-	run;
-proc sort data=mydata.asthmareduced out=asthma;
-  by countyfips;
+proc surveyselect data=mydata.project1alldata method=srs n=100
+                  out=mydata.project1sampledata seed=123;
 run;
 
-data mydata.airqualityreduced;
-	rename value = airquality;
-	set mydata.airquality (keep = countyfips value);
-	run;
-proc sort data=mydata.airqualityreduced out=airquality;
-  by countyfips;
+proc reg data=mydata.project1sampledata plots(only)=(residualbypredicted 
+residualplot qqplot residualhistogram);
+model asthma2 = airquality2  disabilities2 dummyMidwest dummyNortheast dummyWest dummyPhyHigh dummyPhyMed dummyRural healthinsurance2 publictrans2 smoking2/dwprob;
 run;
 
-data mydata.healthinsurancereduced;
-	rename value = healthinsurance;
-	set mydata.healthinsurance (keep = countyfips value);
-	run;
-proc sort data=mydata.healthinsurancereduced out=healthinsurance;
-  by countyfips;
+proc reg data=mydata.project1sampledata plots=none;
+model asthma2 = airquality2  disabilities2 dummyMidwest dummyNortheast dummyWest dummyPhyHigh dummyPhyMed dummyRural healthinsurance2 publictrans2 smoking2 / vif;
 run;
 
-data mydata.landusereduced;
-	rename value = landuse;
-	set mydata.landuse (keep = countyfips value);
-	run;
-proc sort data=mydata.landusereduced out=landuse;
-  by countyfips;
-run;
-
-data mydata.physicalactivityreduced;
-	rename value = physicalactivity;
-	set mydata.physicalactivity (keep = countyfips value);
-	run;
-proc sort data=mydata.physicalactivityreduced out=physicalactivity;
-  by countyfips;
-run;
-
-data mydata.smokingreduced;
-	rename value = smoking;
-	set mydata.smoking (keep = countyfips value);
-	run;
-proc sort data=mydata.smokingreduced out=smoking;
-  by countyfips;
-run;
-
-DATA mydata.project1alldata;
-   MERGE asthma airquality healthinsurance landuse physicalactivity smoking;
-   BY countyFIPS;
-   dummyRural = 0;
-   if  landuse = 2 then dummyRural=1;
-   dummyPhyMed = 0;
-   dummyPhyHigh = 0;
-   if physicalactivity>=21 AND physicalactivity<34 then dummyPhyMed = 1;
-   if physicalactivity>=34 AND physicalactivity<45 then dummyPhyHigh = 1;
-   dummyWest = 0;
-   dummyMidwest = 0;
-   dummyNortheast = 0;
-   if statefips in (9,23,25,33,44,50,34,36,42) then dummyNortheast=1;
-   if statefips in (18,17,26,39,55,19,20,27,29,31,38,46) then dummyMidwest=1;
-   if statefips in (4,8,16,35,30,49,32,56,2,6,15,41,53) then dummyWest = 1;
-   asthma2=asthma*1;
-   healthinsurance2 = healthinsurance*1;
-   airquality2 = airquality*1;
-   smoking2 = smoking*1;
-RUN;
-
-proc sgplot data= mydata.project1alldata;
-scatter y=asthma2  x=smoking2;
-run;
-
-proc sgplot data=mydata.project1alldata;
-vbox asthma2/category=dummyRural;
-run;
-
-proc reg data=mydata.project1alldata plots=none;
+​​proc reg data=mydata.projectsample plots=none;
 model asthma2 = disabilities2 publictransport2 smoking2 airquality2 healthinsurance2;
 run;
 
+//MODEL BUILDING
+
+proc reg data=mydata.projectsample plots(only)=(residualbypredicted 
+residualplot qqplot residualhistogram);
+model asthma2 = airquality2  disabilities2 dummyMidwest dummyNortheast dummyWest dummyPhyHigh dummyPhyMed dummyRural healthinsurance2 publictransport2 smoking2/dwprob;
+run;
+
+proc reg data=mydata.projectsample plots=none;
+model asthma2 = airquality2  disabilities2 dummyMidwest dummyNortheast dummyWest dummyPhyHigh dummyPhyMed dummyRural healthinsurance2 publictransport2 smoking2 / vif;
+run;
+
+proc reg data=mydata.projectsample plots=none;
+model asthma2 = disabilities2 publictransport2 smoking2 airquality2 healthinsurance2;
+run;
+
+proc reg data=mydata.projectsample plots=none;
+model asthma2 = disabilities2 publictransport2 smoking2;
+run;
+
+proc reg data=mydata.projectsample plots=none;
+model asthma2 = disabilities2 publictransport2 smoking2 dummywest dummymidwest dummynortheast;
+run;
+
+proc reg data=mydata.projectsample plots=none;
+model asthma2 = disabilities2 publictransport2 smoking2 dummywest dummymidwest dummynortheast;
+test dummywest, dummymidwest, dummynortheast; 
+*include the variables that are in the hypothesis separated by commas;
+run;
+
+//VARIABLE SCREENING
+
+proc reg data=mydata.projectsample plots=none;
+model asthma2 =  disabilities2 publictransport2 smoking2 airquality2 healthinsurance2 / 
+selection=stepwise SLentry=0.05 SLstay=0.10 details; 
+run;
+
+//WEIGHTED SQUARES REGRESSION
+
+proc reg data=mydata.project1sampledata plots = residualbypredicted;
+     model asthma2 = publictrans2 smoking2 dummyMidwest dummyNortheast dummyWest;
+     output out = mydata.sampdata2
+            p = yhat_1 /* Saves fitted values to output data set */
+            r = resids; /* Saves residuals to output data set */
+run;
+
+/* Compute weights */
+data mydata.sampdata2;
+set mydata.sampdata2;
+     state_weight = 1/yhat_1;
+run;
+
+proc reg data=mydata.sampdata2 plots=all;
+  model asthma2 = publictrans2 smoking2 dummyMidwest dummyNortheast dummyWest / dwprob;
+  weight state_weight;
+run;
+
+//INFLUENTIAL OBSERVATIONS
+
+ proc reg data=mydata.projectsample plots(only label)=(cooksd 
+ rstudentbypredicted rstudentbyleverage); 
+model asthma2 = publictransport2 smoking2 dummywest dummymidwest dummynortheast / r influence;
+reweight obs. = 12;
+reweight obs. = 83;
+run;
